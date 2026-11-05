@@ -7,4 +7,5 @@ import (
 
 func RegisterRoutes(router *gin.Engine, healthHandler *v1handler.HealthHandler) {
 	router.GET("/health/live", healthHandler.Live)
+	router.GET("/health/test-error", healthHandler.TestResponseError)
 }
