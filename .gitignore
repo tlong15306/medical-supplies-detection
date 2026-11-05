@@ -1,0 +1,33 @@
+# Cấu hình chứa thông tin riêng
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Frontend
+node_modules/
+dist/
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# Go: file build và chạy tạm
+/backend/bin/
+/backend/tmp/
+coverage.out
+
+# Model và log
+*.pth
+*.pt
+*.onnx
+*.engine
+*.log
+
+# Hệ điều hành
+.DS_Store
+Thumbs.db
