@@ -17,7 +17,7 @@ type Client struct {
 }
 type Prediction struct {
 	FrameID        *int        `json:"frame_id"`
-	ModelName      string      `json:"model_name"`
+	ModelName      string      `json:"model"`
 	Device         string      `json:"device"`
 	Image          ImageSize   `json:"image"`
 	Confidence     float64     `json:"confidence_threshold"`
