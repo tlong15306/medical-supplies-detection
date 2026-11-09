@@ -5,7 +5,8 @@ import (
 )
 
 type Config struct {
-	ServerAddress string
+	ServerAddress    string
+	InferenceBaseURL string
 }
 
 func NewConfig() *Config {
@@ -13,7 +14,12 @@ func NewConfig() *Config {
 	if address == "" {
 		address = ":8080"
 	}
+	inferenceBaseURL := os.Getenv("INFERENCE_BASE_URL")
+	if inferenceBaseURL == "" {
+		inferenceBaseURL = "http://127.0.0.1:8000"
+	}
 	return &Config{
-		ServerAddress: address,
+		ServerAddress:    address,
+		InferenceBaseURL: inferenceBaseURL,
 	}
 }

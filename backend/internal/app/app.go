@@ -27,7 +27,7 @@ func NewApplication(cfg *config.Config) *Application {
 	r := gin.Default()
 
 	modules := []Module{
-		NewDetectionModule(),
+		NewDetectionModule(cfg.InferenceBaseURL),
 	}
 
 	routes.RegisterRoutes(r, getModulRoutes(modules)...)

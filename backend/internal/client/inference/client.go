@@ -1,4 +1,4 @@
-package interference
+package inference
 
 import (
 	"bytes"
