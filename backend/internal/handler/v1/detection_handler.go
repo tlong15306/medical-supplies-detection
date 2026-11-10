@@ -1,6 +1,7 @@
 package v1handler
 
 import (
+	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -32,9 +33,39 @@ func (h *DetectionHandler) Detect(ctx *gin.Context) {
 		utils.ResponseError(ctx, utils.NewError("Failed to get image file", utils.ErrBadRequest))
 		return
 	}
+	file, err := image.Open()
+	if err != nil {
+		utils.ResponseError(ctx, utils.NewError("Failed to open image file", utils.ErrInternalServer))
+		return
+	}
+	defer file.Close()
+	prediction, err := h.inferenceClient.Predict(
+		ctx.Request.Context(),
+		image.Filename,
+		file,
+	)
+	if err != nil {
+		log.Printf("predict image: %v", err)
+		utils.ResponseError(ctx, utils.NewError("Failed to get prediction from inference service", utils.ErrInternalServer))
+		return
+	}
+	detections := make([]gin.H, 0, len(prediction.Detections))
+
+	for _, detection := range prediction.Detections {
+		detections = append(detections, gin.H{
+			"class_id":   detection.ClassID,
+			"class_name": detection.ClassName,
+			"confidence": detection.Confidence,
+			"bbox":       detection.BoundingBox,
+		})
+	}
+
 	utils.ResponseSuccess(ctx, gin.H{
-		"filename":   image.Filename,
-		"size_bytes": image.Size,
+		"image_width":   prediction.Image.Width,
+		"image_height":  prediction.Image.Height,
+		"device":        prediction.Device,
+		"processing_ms": prediction.ProcessingTime,
+		"detections":    detections,
 	}, http.StatusOK)
 
 }
