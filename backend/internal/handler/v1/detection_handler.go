@@ -5,20 +5,21 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/tlong15306/medical-supplies-detection/backend/internal/client/inference"
+	"github.com/tlong15306/medical-supplies-detection/backend/internal/dto"
+	"github.com/tlong15306/medical-supplies-detection/backend/internal/service"
 	"github.com/tlong15306/medical-supplies-detection/backend/internal/utils"
 	"github.com/tlong15306/medical-supplies-detection/backend/internal/validation"
 )
 
 type DetectionHandler struct {
-	inferenceClient *inference.Client
+	service service.DetectionService
 }
 type DetectionRequest struct {
 }
 
-func NewDetectionHandler(client *inference.Client) *DetectionHandler {
+func NewDetectionHandler(service service.DetectionService) *DetectionHandler {
 	return &DetectionHandler{
-		inferenceClient: client,
+		service: service,
 	}
 }
 func (h *DetectionHandler) Detect(ctx *gin.Context) {
@@ -39,7 +40,7 @@ func (h *DetectionHandler) Detect(ctx *gin.Context) {
 		return
 	}
 	defer file.Close()
-	prediction, err := h.inferenceClient.Predict(
+	model, err := h.service.Detect(
 		ctx.Request.Context(),
 		image.Filename,
 		file,
@@ -49,23 +50,7 @@ func (h *DetectionHandler) Detect(ctx *gin.Context) {
 		utils.ResponseError(ctx, utils.NewError("Failed to get prediction from inference service", utils.ErrInternalServer))
 		return
 	}
-	detections := make([]gin.H, 0, len(prediction.Detections))
-
-	for _, detection := range prediction.Detections {
-		detections = append(detections, gin.H{
-			"class_id":   detection.ClassID,
-			"class_name": detection.ClassName,
-			"confidence": detection.Confidence,
-			"bbox":       detection.BoundingBox,
-		})
-	}
-
-	utils.ResponseSuccess(ctx, gin.H{
-		"image_width":   prediction.Image.Width,
-		"image_height":  prediction.Image.Height,
-		"device":        prediction.Device,
-		"processing_ms": prediction.ProcessingTime,
-		"detections":    detections,
-	}, http.StatusOK)
+	response := dto.MapDetectionResultToDTO(model)
+	utils.ResponseSuccess(ctx, response, http.StatusOK)
 
 }
