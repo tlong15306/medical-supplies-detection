@@ -29,6 +29,7 @@ func (s *detectionService) Detect(ctx context.Context, filename string, image io
 			ClassName:   item.ClassName,
 			Confidence:  item.Confidence,
 			BoundingBox: item.BoundingBox,
+			Bin:         resolveBin(item.ClassName),
 		})
 	}
 	return model.DetectionResult{

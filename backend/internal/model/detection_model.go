@@ -5,6 +5,7 @@ type Detection struct {
 	ClassName   string
 	Confidence  float64
 	BoundingBox [4]float64
+	Bin         *string
 }
 type DetectionResult struct {
 	ImageWidth   int

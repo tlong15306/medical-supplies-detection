@@ -15,6 +15,7 @@ type DetectionItem struct {
 	ClassName  string     `json:"class_name"`
 	Confidence float64    `json:"confidence"`
 	BBox       [4]float64 `json:"bbox"`
+	Bin        *string    `json:"bin"`
 }
 
 func MapDetectionResultToDTO(result model.DetectionResult) DetectionResponse {
@@ -26,6 +27,7 @@ func MapDetectionResultToDTO(result model.DetectionResult) DetectionResponse {
 			ClassName:  detection.ClassName,
 			Confidence: detection.Confidence,
 			BBox:       detection.BoundingBox,
+			Bin:        detection.Bin,
 		})
 	}
 
