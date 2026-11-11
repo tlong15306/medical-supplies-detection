@@ -3,7 +3,9 @@ name: ${STACK_NAME:-medical-supplies}-mock
 services:
   frontend:
     platform: linux/amd64
-    build: ./frontend
+    build:
+      context: ./frontend
+      target: development
     environment:
       VITE_USE_MOCK: "1"
       VITE_MOCK_SCENARIO: ${VITE_MOCK_SCENARIO:-success}

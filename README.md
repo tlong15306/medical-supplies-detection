@@ -2,7 +2,7 @@
 
 Ứng dụng nhận diện đồ dùng y tế bằng YOLO11s.
 
-## Công nghệ dự kiến
+## Công nghệ
 
 - Frontend: React + TypeScript.
 - Backend API: Go/Gin.
@@ -13,10 +13,9 @@
 
 Frontend → Gin → FastAPI → YOLO11s
 
-Kết quả được trả về qua Gin để frontend hiển thị
-nhãn, độ tin cậy và bounding box.
+Kết quả được trả về qua Gin để frontend hiển thị nhãn, độ tin cậy, bounding box và thùng chứa cho từng vật thể.
 
-## Cấu trúc dự kiến
+## Cấu trúc
 
 - frontend/: giao diện người dùng.
 - backend/: API và nghiệp vụ bằng Gin.
@@ -26,7 +25,8 @@ nhãn, độ tin cậy và bounding box.
 
 ## Phạm vi ban đầu
 
-- Nhận diện ảnh tải lên và webcam.
+- Đã tích hợp nhận diện ảnh JPG/PNG tải lên và phân nhóm thùng chứa.
+- Video/webcam là bước phát triển tiếp theo.
 - Chưa triển khai đăng nhập hoặc lưu lịch sử.
 
 ## Chạy cùng môi trường bằng Docker
@@ -51,9 +51,10 @@ Chỉ copy `.env.example` khi chưa có `.env`; giữ cấu hình cá nhân đã
 - Gin API: http://localhost:8080
 - Kiểm tra Gin: http://localhost:8080/health/live
 - FastAPI chạy nội bộ; Gin gọi `http://inference:8000`.
+- Frontend là bản build tĩnh do Nginx phục vụ; Nginx chuyển `/api/` sang Gin trong mạng Docker.
 
 Chọn ảnh trên giao diện hoặc gọi `POST /api/v1/detections` trong Postman với field `image` kiểu File.
-Backend trả mã thùng ở `Data.detections[].bin`. Việc hiển thị tên thùng trên frontend đang được bàn giao riêng trong [tài liệu frontend](docs/frontend-bin-handoff/README.md).
+Backend trả mã thùng ở `Data.detections[].bin`. Frontend đã hiển thị thùng trên từng box, từng dòng kết quả và các nhóm đếm vật thể; chọn một vật sẽ làm nổi bật phần tương ứng. Null, thiếu field hoặc mã lạ hiển thị “Chưa xác định thùng”. Xem [đặc tả frontend](docs/frontend-bin-handoff/README.md).
 
 ### Chạy giao diện mock trên máy không có GPU/model
 
@@ -62,7 +63,7 @@ docker compose -f compose.mock.yaml up -d --build --wait
 ```
 
 Mở http://localhost:5175. Chế độ này chỉ chạy frontend và API mock bên trong Vite, có nhãn “Dữ liệu mô phỏng”.
-Đặt `VITE_MOCK_SCENARIO=empty` hoặc `error` trong `.env`, rồi chạy lại `docker compose -f compose.mock.yaml up -d` để thử các trạng thái khác.
+Đặt `VITE_MOCK_SCENARIO=success|multi|unknown|empty|error` trong `.env` (chọn một giá trị), rồi chạy lại `docker compose -f compose.mock.yaml up -d` để thử các trạng thái khác. Cấu hình mock chọn target development dùng Vite, tách khỏi runtime Nginx của stack thật.
 
 ### Xem log, cập nhật và dừng
 

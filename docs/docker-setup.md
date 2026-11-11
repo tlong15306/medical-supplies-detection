@@ -52,10 +52,14 @@ Nhóm tiếp tục chia sẻ `best.pt` riêng. Trọng số được gắn vào 
 
 ### Dockerfile frontend
 
-- Cố định Node 24.19.0, dùng `npm ci` theo `package-lock.json`.
-- User `node` có quyền sở hữu thư mục ứng dụng để Vite ghi cache dependency.
-- Đây là môi trường demo/phát triển dùng Vite. Phát hành production với web server tĩnh là bước triển khai riêng.
-- Giữ nguyên UI do thành viên frontend phụ trách; cấu hình mock và proxy truyền qua biến môi trường.
+- Cố định Node 24.19.0, dùng `npm ci` theo `package-lock.json` ở target `development`.
+- Target `build` tạo `dist` bằng `tsc --noEmit && vite build`, cố định `VITE_USE_MOCK=0` cho stack thật.
+- Target `runtime` chỉ chứa file tĩnh và Nginx unprivileged, image nền được khóa digest. Chạy ở cổng 8080 trong container; Node/npm và source TypeScript không nằm trong runtime.
+- `frontend/nginx/default.conf.template` được entrypoint Nginx tạo thành config khi khởi động, thay `API_PROXY_TARGET` bằng URL Gin. Cấu hình giữ nguyên `/api/` trong request, có timeout và giới hạn body 11 MiB gồm multipart; ảnh vẫn bị giới hạn 10 MiB tại ứng dụng.
+- Nginx trả file build và proxy API từ cùng origin; trình duyệt không cần biết địa chỉ service nội bộ hay gọi FastAPI trực tiếp.
+- Nginx dùng Docker DNS `127.0.0.11` để phân giải lại địa chỉ Gin, giúp proxy tiếp tục hoạt động khi container API được tạo lại. `API_PROXY_TARGET` là base URL không có dấu `/` ở cuối; URI và query của request được giữ nguyên.
+- `compose.mock.yaml` chọn target `development`, giữ Vite và API mock độc lập. User `node` có quyền ghi cache Vite.
+- UI từ `feat/frontend-bin-display` đã merge vào backend; metadata thùng nằm ở frontend, bảng `class_name → bin` tiếp tục nằm ở service Go.
 
 ### Image và nền tảng
 
@@ -68,18 +72,19 @@ Docker cố định userspace của ứng dụng. Driver GPU, kernel/WSL2 và t�
 ### Compose và networking
 
 ```text
-Trình duyệt → localhost:5174 → frontend:5173
+Trình duyệt → localhost:5174 → frontend:8080 (Nginx)
                                   ↓ proxy /api
                               api:8080
                                   ↓ HTTP
                             inference:8000 → cuda:0
 ```
 
-- `frontend` dùng `VITE_USE_MOCK=0` và `API_PROXY_TARGET=http://api:8080`.
+- Frontend build với `VITE_USE_MOCK=0`; Nginx runtime dùng `API_PROXY_TARGET=http://api:8080`.
 - Gin dùng `SERVER_ADDRESS=:8080` và `INFERENCE_BASE_URL=http://inference:8000`.
 - Tên service là địa chỉ nội bộ. `localhost` trong container trỏ về chính container đó.
 - Chỉ publish frontend và Gin ra loopback của host; FastAPI nằm trong mạng Compose.
 - Healthcheck inference thành công sau warm-up → Gin khởi động → healthcheck Gin thành công → frontend khởi động.
+- Frontend có `/health/ready` riêng. Ba service dùng `restart: unless-stopped`; khởi động lại process không đồng nghĩa đã sẵn sàng, nên tiếp tục kiểm tra health/log khi cần.
 - Healthcheck xác nhận service sẵn sàng; mã xử lý request vẫn phải xử lý lỗi khi upstream gặp sự cố trong lúc chạy.
 - Tên project ổn định `medical-supplies` tránh phụ thuộc tên thư mục clone/worktree. Có thể đổi `STACK_NAME` nếu chủ động chạy nhiều bản độc lập.
 - File `compose.mock.yaml` chạy một project riêng, mặc định ở cổng 5175. Chạy file này độc lập bằng `-f`, không ghép chồng lên Compose GPU.
@@ -99,7 +104,7 @@ Các cấu hình có thể đổi:
 | `API_PORT` | 8080 | Cổng Gin trên host |
 | `FRONTEND_PORT` | 5174 | Cổng UI thật trên host |
 | `FRONTEND_MOCK_PORT` | 5175 | Cổng UI mock trên host |
-| `VITE_MOCK_SCENARIO` | success | Scenario mock hiện có: success, empty, error |
+| `VITE_MOCK_SCENARIO` | success | Scenario mock: success, multi, unknown, empty, error |
 
 Đường dẫn model tương đối được tính từ thư mục Compose. Trên Windows có thể dùng đường dẫn tuyệt đối với dấu `/`, ví dụ `C:/models/best.pt`.
 
@@ -153,7 +158,7 @@ Trong terminal PowerShell, có thể gọi bằng:
 curl.exe --fail-with-body -F "image=@C:\path\to\syringe.jpg" http://127.0.0.1:8080/api/v1/detections
 ```
 
-Hoặc mở http://localhost:5174 và tải ảnh. Giao diện hiện có hiển thị box, nhãn và confidence. Mã `bin` có trong response; giao diện tên thùng được triển khai theo tài liệu bàn giao frontend.
+Hoặc mở http://localhost:5174 và tải ảnh. Giao diện hiển thị box, nhãn, confidence, tên thùng và các nhóm đếm vật thể. Chọn box/dòng/vật trong nhóm để làm nổi bật các phần tương ứng.
 
 Máy chỉ làm UI:
 
@@ -181,7 +186,7 @@ Source nằm trong image, nên `restart` không cập nhật source mới. Build
 - Dừng stack thật bằng `docker compose down`, stack mock bằng `docker compose -f compose.mock.yaml down`.
 - Lần đầu dựng image CUDA cần tải/giải nén vài GB và đủ dung lượng đĩa. Nếu host đang thiếu RAM, đóng bớt ứng dụng nặng trước khi build. Trong lượt kiểm tra này các container có sẵn từng dừng gần cùng thời điểm lúc giải nén; host còn khoảng 600 MiB RAM trống, nhưng Docker ghi `OOMKilled=false` nên chưa xác định nguyên nhân. Đã khởi động lại đúng hai container có sẵn (`postgres-db`, Gin cũ) và mock; không xóa volume hoặc reset Docker.
 
-## Kết quả xác minh
+## Kết quả xác minh lần dựng ban đầu
 
 Đã chạy thực tế ngày 11/11/2026 trên Windows, Docker Desktop/WSL2, RTX 2050. Cổng local của lượt kiểm tra: Gin 8082, frontend 5176, mock 5175.
 
@@ -207,12 +212,48 @@ Source nằm trong image, nên `restart` không cập nhật source mới. Build
 
 Ba request liên tiếp ghi nhận `processing_ms` lần lượt 829,42 (FastAPI), 216,97 (Gin) và 29,37 (qua proxy). Đây là các mẫu đơn trong lần chạy, không phải benchmark; chỉ số này do FastAPI đo, không phải toàn bộ độ trễ từ trình duyệt. Lúc warm-up đầu tiên có cảnh báo `NMS time limit 2.050s exceeded`; ứng dụng sau đó hoàn tất startup trên `cuda:0`, và ba lượt ảnh thật đều trả đúng kết quả.
 
-Giới hạn xác minh: công cụ điều khiển browser bị tắt trong Work settings, nên chưa kiểm tra thao tác upload và hình vẽ bbox bằng trình duyệt. Đã kiểm tra HTTP và gửi ảnh qua chính proxy Vite. Frontend hiện có chưa hiển thị tên thùng; phần đó tiếp tục theo `docs/frontend-bin-handoff/`. Đây là cấu hình demo/phát triển, chưa phải triển khai production hay chứng minh chạy được trên mọi loại GPU/OS. Bài unit test ánh xạ thùng vẫn được hoãn theo yêu cầu học sau.
+Giới hạn của lần dựng ban đầu: browser bị tắt trong Work settings; lúc đó frontend dùng Vite và chưa hiển thị tên thùng. Kết quả này là mốc lịch sử trước khi merge giao diện mới. Bài unit test ánh xạ thùng vẫn được hoãn theo yêu cầu học sau.
 
-Các thay đổi Docker và tài liệu hiện ở local, chưa commit/push trong lượt này. Trước khi thành viên khác clone để dùng, chủ repo cần commit/push hoặc merge các file này. Không đưa `.env`, `.venv` hay `best.pt` vào commit.
+## Tích hợp frontend và hoàn thiện Docker
+
+1. Commit `a7f891d` lưu bộ Docker ban đầu và tài liệu để có mốc khôi phục trước khi merge.
+2. Merge `origin/feat/frontend-bin-display` tại `3043e59` vào `feat/detection-api-gpu`, tạo merge commit `544c8fc`, không có conflict. Giữ cấu hình Docker local đã khóa image.
+3. Đổi Dockerfile frontend thành ba target development/build/runtime, thêm Nginx proxy và healthcheck. Compose thật chọn runtime; Compose mock chọn development.
+4. Cập nhật README, sơ đồ cổng, hướng dẫn build và scenario mock. Model, `.env` và `.venv` tiếp tục bị Git bỏ qua.
+5. Build và chạy lại toàn bộ stack, sau đó kiểm tra ảnh thật qua Nginx cùng các kịch bản mock. Kết quả của lượt tích hợp được ghi ở bảng dưới.
+
+Các ảnh screenshot và kết quả review nhánh frontend trước merge được ghi riêng tại [báo cáo review 3043e59](frontend-review-3043e59.md). Đã dừng hai container review tạm ở 5177/5178 để dùng stack tích hợp chính tại 5176. Mock Compose riêng dùng 5175.
+
+### Xác minh sau merge
+
+| Kiểm tra | Kết quả thực tế |
+|---|---|
+| `docker compose config -q`, cả hai cấu hình | PASS |
+| Build đầy đủ, `up --build --wait` | PASS; inference, API, frontend đều healthy |
+| Frontend build | TypeScript + Vite 7.3.7 PASS |
+| `go -C backend test -mod=readonly ./...` | PASS; package hiện chưa có unit test |
+| Nginx runtime | 1.30.6, UID/GID 101, `nginx -t` PASS |
+| Trang gốc và JS/CSS build | HTTP 200, đúng MIME; không dùng Vite dev client |
+| Asset không tồn tại | HTTP 404, không trả SPA HTML thay cho JavaScript |
+| Nginx health | `/health/ready` HTTP 200 |
+| Proxy thiếu ảnh | Gin trả HTTP 400 với JSON `Code=ERR_BAD_REQUEST`, đi qua Nginx nguyên trạng |
+| Body lớn hơn 11 MiB | Nginx trả HTTP 413 |
+| Ảnh bơm tiêm thật qua cổng 5176 | PASS; HTTP 200, `cuda:0`, syringe, `yellow_sharps`, confidence 0.9508109092712402 |
+| Mock target development | Build thành công, service healthy ở 5175 |
+| DOM + HTTP trên source sau merge | Sáu scenario success/multi/unknown/empty/error/real đều PASS |
+| Git | Frontend đã merge; `.env`, `.venv`, `.pt` không đưa vào commit |
+
+Trong kiểm tra DOM, đã xác nhận box/dòng kết quả/nhóm liên kết lựa chọn đúng, nhiều vật cùng class giữ riêng, null/thiếu/mã lạ vào nhóm chưa xác định, số lượng nhóm đúng, thay ảnh xóa kết quả cũ và loading/lỗi vẫn hoạt động. Bộ kiểm tra tạm nằm ngoài repo tại `C:/Users/choqu/AppData/Local/Temp/ptdacntt-fe-review-3043e59/check-integrated.cjs`; kết quả ở `results-integrated.json`. Kiểm tra HTTP Nginx ở `check-nginx.cjs` và `nginx-results.json` cùng thư mục. Đây chưa phải bộ test CI được đưa vào dự án.
+
+Browser vẫn bị tắt trong Work settings. Kết quả trên xác minh DOM/state, file build và request HTTP thật, chưa xác minh layout/độ khớp box theo pixel bằng browser render trên desktop/mobile. Mở http://localhost:5176, chọn ảnh JPG/PNG rồi nhấn Nhận diện để kiểm tra trực tiếp. Không có thay đổi giao diện ngoài source của nhánh frontend đã merge.
+
+Lượt này tạo commit local cho merge và hoàn thiện Docker; chưa push nhánh lên GitHub. Khi chia sẻ cho nhóm, push nhánh `feat/detection-api-gpu` hoặc tạo PR vào main. Không copy `.env` hay checkpoint lên Git; chia sẻ model riêng cùng hash ở trên.
+
+Frontend đã đóng gói thành file tĩnh, nhưng việc triển khai công khai còn cần thiết kế riêng về domain/TLS, xác thực và vận hành. Lượt này chỉ chạy trên loopback của máy phát triển.
 
 ## Nguồn kỹ thuật
 
 - [PyTorch — cặp phiên bản 2.5.1/0.20.1 và CUDA 12.1](https://pytorch.org/get-started/previous-versions/)
 - [Docker Compose — cấp quyền GPU](https://docs.docker.com/compose/how-tos/gpu-support/)
 - [Docker Compose — healthcheck và thứ tự khởi động](https://docs.docker.com/compose/how-tos/startup-order/)
+- [NGINX — image unprivileged, cổng 8080 và khóa digest](https://github.com/nginx/docker-nginx-unprivileged)

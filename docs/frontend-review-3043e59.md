@@ -2,6 +2,8 @@
 
 Ngày kiểm tra: 11/11/2026.
 
+**Cập nhật sau review:** frontend đã được merge vào `feat/detection-api-gpu` ở commit `544c8fc`, và stack tích hợp Nginx/Gin/GPU hiện chạy tại http://localhost:5176. Hai container review tạm 5177/5178 đã dừng. Nội dung bên dưới lưu lại kết quả tại thời điểm review riêng; xem [nhật ký Docker](docker-setup.md) cho trạng thái sau merge.
+
 ## Source và cách lấy về
 
 - Remote: `https://github.com/tlong15306/medical-supplies-detection.git`.
