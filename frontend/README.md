@@ -26,3 +26,5 @@ npm run build
 ```
 
 Trên PowerShell, đặt biến bằng `$env:VITE_USE_MOCK="1"` và `$env:VITE_MOCK_SCENARIO="success"` trước `npm run dev`. Đặt `VITE_USE_MOCK=0` để chuyển `/api` tới Gin; `API_PROXY_TARGET` mặc định là `http://127.0.0.1:8080` khi chạy ngoài Compose. Đặt biến này theo địa chỉ API thực tế trong môi trường container. Khởi động lại Vite sau khi đổi biến.
+
+Các kịch bản mock: `success` (một vật), `multi` (bốn vật, gồm hai khẩu trang và đủ ba thùng), `unknown` (bin null, thiếu và mã lạ), `empty`, `error`. Thay `$env:VITE_MOCK_SCENARIO` rồi khởi động lại Vite để đổi kịch bản. Mock chỉ minh họa và không dùng ảnh để nhận diện thật.
