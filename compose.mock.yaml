@@ -1,0 +1,19 @@
+name: ${STACK_NAME:-medical-supplies}-mock
+
+services:
+  frontend:
+    platform: linux/amd64
+    build:
+      context: ./frontend
+      target: development
+    environment:
+      VITE_USE_MOCK: "1"
+      VITE_MOCK_SCENARIO: ${VITE_MOCK_SCENARIO:-success}
+    ports:
+      - "127.0.0.1:${FRONTEND_MOCK_PORT:-5175}:5173"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5173/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s

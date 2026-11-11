@@ -92,6 +92,11 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Medical Supplies Inference", lifespan=lifespan)
 
 
+@app.get("/health/ready")
+def ready(request: Request):
+    return {"status": "ready", "device": request.app.state.device}
+
+
 def decode_image(upload: UploadFile) -> Image.Image:
     raw = upload.file.read(MAX_IMAGE_BYTES + 1)
     if len(raw) > MAX_IMAGE_BYTES:
