@@ -32,7 +32,17 @@ export function mockDetection(scenario: string): Plugin {
         } catch { return send(400, { Error: 'Không đọc được ảnh JPG hoặc PNG.', Code: 'INVALID_IMAGE' }) }
         setTimeout(() => {
           if (scenario === 'error') return send(502, { Error: 'Dịch vụ nhận diện tạm thời không khả dụng.', Code: 'DETECTION_UNAVAILABLE' })
-          const detections = scenario === 'empty' ? [] : [{ class_id: 0, class_name: 'syringe', confidence: 0.9508, bbox: [width * .2, height * .1, width * .72, height * .9] }]
+          const detection = (class_id: number, class_name: string, confidence: number, coords: number[], bin?: string | null) => ({ class_id, class_name, confidence, bbox: [coords[0] * width, coords[1] * height, coords[2] * width, coords[3] * height], ...(bin === undefined ? {} : { bin }) })
+          const detections = scenario === 'empty' ? [] : scenario === 'multi' ? [
+            detection(0, 'syringe', .951, [.05,.05,.42,.42], 'yellow_sharps'),
+            detection(5, 'mask', .963, [.56,.05,.94,.42], 'yellow_infectious'),
+            detection(5, 'mask', .942, [.05,.55,.42,.92], 'yellow_infectious'),
+            detection(6, 'medicine', .907, [.56,.55,.94,.92], 'black_hazardous'),
+          ] : scenario === 'unknown' ? [
+            detection(0, 'syringe', .951, [.05,.05,.42,.42], null),
+            detection(5, 'mask', .963, [.56,.05,.94,.42]),
+            detection(6, 'medicine', .907, [.05,.55,.42,.92], 'unknown_code'),
+          ] : [detection(0, 'syringe', .9508, [.2,.1,.72,.9], 'yellow_sharps')]
           send(200, { Status: 'success', Data: { image_width: width, image_height: height, detections } })
         }, 500)
       })
