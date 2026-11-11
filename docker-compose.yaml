@@ -1,19 +1,64 @@
-services:
-  api:
-    image: golang:1.26-bookworm
-    working_dir: /app
-    command: ["go", "run", "./cmd/api"]
+name: ${STACK_NAME:-medical-supplies}
 
+services:
+  inference:
+    platform: linux/amd64
+    build: ./inference
+    environment:
+      MODEL_PATH: /models/best.pt
+    volumes:
+      - type: bind
+        source: ${MODEL_FILE:-./inference/model_assets/best.pt}
+        target: /models/best.pt
+        read_only: true
+        bind:
+          create_host_path: false
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      start_period: 90s
+      retries: 6
+
+  api:
+    platform: linux/amd64
+    build: ./backend
     environment:
       SERVER_ADDRESS: ":8080"
+      INFERENCE_BASE_URL: http://inference:8000
     ports:
-      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:${API_PORT:-8080}:8080"
+    depends_on:
+      inference:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/health/live"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
 
-    volumes:
-      - ./backend:/app
-      - go-mod-cache:/go/pkg/mod
-      - go-build-cache:/root/.cache/go-build
-
-volumes:
-  go-mod-cache:
-  go-build-cache:
+  frontend:
+    platform: linux/amd64
+    build: ./frontend
+    environment:
+      VITE_USE_MOCK: "0"
+      API_PROXY_TARGET: http://api:8080
+    ports:
+      - "127.0.0.1:${FRONTEND_PORT:-5174}:5173"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5173/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s

@@ -1,0 +1,11 @@
+.env
+.env.*
+.venv/
+__pycache__/
+*.pyc
+*.log
+model_assets/
+*.pt
+*.pth
+*.onnx
+*.engine
