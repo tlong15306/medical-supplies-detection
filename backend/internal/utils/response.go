@@ -9,13 +9,16 @@ import (
 type ErrorCodes string
 
 const (
-	ErrInternalServer ErrorCodes = "ERR_INTERNAL_SERVER"
-	ErrBadRequest     ErrorCodes = "ERR_BAD_REQUEST"
-	ErrNotFound       ErrorCodes = "ERR_NOT_FOUND"
-	ErrUnauthorized   ErrorCodes = "ERR_UNAUTHORIZED"
-	ErrForbidden      ErrorCodes = "ERR_FORBIDDEN"
-	ErrCodeConflict   ErrorCodes = "ERR_CODE_CONFLICT"
-	ErrCodeInternal   ErrorCodes = "ERR_CODE_INTERNAL"
+	ErrInternalServer       ErrorCodes = "ERR_INTERNAL_SERVER"
+	ErrBadRequest           ErrorCodes = "ERR_BAD_REQUEST"
+	ErrNotFound             ErrorCodes = "ERR_NOT_FOUND"
+	ErrUnauthorized         ErrorCodes = "ERR_UNAUTHORIZED"
+	ErrForbidden            ErrorCodes = "ERR_FORBIDDEN"
+	ErrCodeConflict         ErrorCodes = "ERR_CODE_CONFLICT"
+	ErrCodeInternal         ErrorCodes = "ERR_CODE_INTERNAL"
+	ErrInferenceBusy        ErrorCodes = "INFERENCE_BUSY"
+	ErrInferenceUnavailable ErrorCodes = "INFERENCE_UNAVAILABLE"
+	ErrInferenceTimeout     ErrorCodes = "INFERENCE_TIMEOUT"
 )
 
 type AppError struct {
@@ -73,6 +76,12 @@ func ResponseErrorValidator(c *gin.Context, data any) {
 }
 func httpStausFromCode(code ErrorCodes) int {
 	switch code {
+	case ErrInferenceBusy:
+		return http.StatusTooManyRequests
+	case ErrInferenceUnavailable:
+		return http.StatusBadGateway
+	case ErrInferenceTimeout:
+		return http.StatusGatewayTimeout
 	case ErrBadRequest:
 		return http.StatusBadRequest
 	case ErrUnauthorized:

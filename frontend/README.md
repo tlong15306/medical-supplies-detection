@@ -1,5 +1,9 @@
 # Giao diện nhận diện vật tư
 
+Giao diện hỗ trợ ảnh tải lên và webcam liên tục trên localhost. Chọn **Webcam → Bật webcam**; mỗi kết quả thay thế khung trước, không cộng dồn số vật thể. Đổi sang Tải ảnh, tắt webcam hoặc ẩn trang sẽ dừng camera. Box trên video live có độ trễ; độ trễ và tốc độ cập nhật được hiển thị dưới camera.
+
+Xem [tài liệu triển khai webcam](../docs/webcam-implementation.md) để hiểu thiết kế và cách đọc code. Chạy test bằng `npm run test:e2e` sau khi cài dependency và `npx playwright install chromium`; Playwright dùng camera/API giả, không mở webcam thật.
+
 Yêu cầu Node.js 24 hoặc Docker. Từ thư mục gốc dự án, chạy mock độc lập:
 
 ```sh

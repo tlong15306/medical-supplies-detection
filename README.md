@@ -26,7 +26,7 @@ Kết quả được trả về qua Gin để frontend hiển thị nhãn, độ
 ## Phạm vi ban đầu
 
 - Đã tích hợp nhận diện ảnh JPG/PNG tải lên và phân nhóm thùng chứa.
-- Video/webcam là bước phát triển tiếp theo.
+- Webcam laptop: nhận diện liên tục trên trình duyệt local; số lượng theo khung vừa xử lý. Video tải lên và tracking chưa triển khai.
 - Chưa triển khai đăng nhập hoặc lưu lịch sử.
 
 ## Chạy cùng môi trường bằng Docker
@@ -54,6 +54,10 @@ Chỉ copy `.env.example` khi chưa có `.env`; giữ cấu hình cá nhân đã
 - Frontend là bản build tĩnh do Nginx phục vụ; Nginx chuyển `/api/` sang Gin trong mạng Docker.
 
 Chọn ảnh trên giao diện hoặc gọi `POST /api/v1/detections` trong Postman với field `image` kiểu File.
+
+Để dùng camera, chọn **Webcam → Bật webcam** và cho phép trình duyệt truy cập camera. Video hiển thị box, nhãn và thùng chứa; box có độ trễ khi vật thể di chuyển. **Tắt webcam**, chuyển sang Tải ảnh hoặc ẩn trang sẽ giải phóng camera. Mở lại trang cần bật webcam lại.
+
+Xem [quá trình triển khai và giải thích webcam](docs/webcam-implementation.md) để học luồng code, quản lý phiên, xử lý lỗi và cách kiểm thử.
 Backend trả mã thùng ở `Data.detections[].bin`. Frontend đã hiển thị thùng trên từng box, từng dòng kết quả và các nhóm đếm vật thể; chọn một vật sẽ làm nổi bật phần tương ứng. Null, thiếu field hoặc mã lạ hiển thị “Chưa xác định thùng”. Xem [đặc tả frontend](docs/frontend-bin-handoff/README.md).
 
 ### Chạy giao diện mock trên máy không có GPU/model
