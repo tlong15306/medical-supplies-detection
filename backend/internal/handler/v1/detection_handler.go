@@ -1,10 +1,12 @@
 package v1handler
 
 import (
+	"errors"
 	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/tlong15306/medical-supplies-detection/backend/internal/client/inference"
 	"github.com/tlong15306/medical-supplies-detection/backend/internal/dto"
 	"github.com/tlong15306/medical-supplies-detection/backend/internal/service"
 	"github.com/tlong15306/medical-supplies-detection/backend/internal/utils"
@@ -47,7 +49,19 @@ func (h *DetectionHandler) Detect(ctx *gin.Context) {
 	)
 	if err != nil {
 		log.Printf("predict image: %v", err)
-		utils.ResponseError(ctx, utils.NewError("Failed to get prediction from inference service", utils.ErrInternalServer))
+		code, message := utils.ErrInternalServer, "Không thể nhận diện ảnh."
+		var upstream *inference.UpstreamError
+		if errors.As(err, &upstream) {
+			switch upstream.Status {
+			case http.StatusTooManyRequests:
+				code, message = utils.ErrInferenceBusy, "Model đang bận. Vui lòng chờ rồi thử lại."
+			case http.StatusGatewayTimeout:
+				code, message = utils.ErrInferenceTimeout, "Dịch vụ nhận diện phản hồi quá chậm."
+			default:
+				code, message = utils.ErrInferenceUnavailable, "Dịch vụ nhận diện tạm thời không khả dụng."
+			}
+		}
+		utils.ResponseError(ctx, utils.NewError(message, code))
 		return
 	}
 	response := dto.MapDetectionResultToDTO(model)

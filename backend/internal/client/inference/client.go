@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
+	"net"
 	"net/http"
 	"time"
 )
@@ -15,6 +17,27 @@ type Client struct {
 	baseURL    string
 	httpClient *http.Client
 }
+
+// UpstreamError carries an HTTP classification across the service's %w wrapper.
+type UpstreamError struct {
+	Status int
+	Cause  error
+}
+
+func (e *UpstreamError) Error() string {
+	return fmt.Sprintf("inference status %d: %v", e.Status, e.Cause)
+}
+func (e *UpstreamError) Unwrap() error { return e.Cause }
+
+func upstreamFailure(err error) *UpstreamError {
+	status := http.StatusBadGateway
+	var networkError net.Error
+	if errors.Is(err, context.DeadlineExceeded) || (errors.As(err, &networkError) && networkError.Timeout()) {
+		status = http.StatusGatewayTimeout
+	}
+	return &UpstreamError{Status: status, Cause: err}
+}
+
 type Prediction struct {
 	FrameID        *int        `json:"frame_id"`
 	ModelName      string      `json:"model"`
@@ -66,18 +89,25 @@ func (c *Client) Predict(ctx context.Context, filename string, image io.Reader) 
 	// Gửi request
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return Prediction{}, fmt.Errorf("Failed to send request: %w", err)
+		return Prediction{}, upstreamFailure(err)
 	}
 	// Đóng luồng phản hồi (Cực kỳ quan trọng) do Connection Pooling kết nối mạng đó sẽ bị treo, dẫn đến rò rỉ kết nối (connection leak) và nhanh chóng làm cạn kiệt tài nguyên của ứng dụng
 	defer resp.Body.Close()
 
 	// 6. Kiểm tra mã phản hồi HTTP
 	if resp.StatusCode != http.StatusOK {
-		return Prediction{}, fmt.Errorf("FastAPI returned error status: %d", resp.StatusCode)
+		status := http.StatusBadGateway
+		if resp.StatusCode == http.StatusTooManyRequests {
+			status = http.StatusTooManyRequests
+		}
+		return Prediction{}, &UpstreamError{Status: status, Cause: fmt.Errorf("HTTP %d", resp.StatusCode)}
 	}
 	var prediction Prediction
 	if err := json.NewDecoder(resp.Body).Decode(&prediction); err != nil {
-		return Prediction{}, fmt.Errorf("Failed to decode response: %w", err)
+		return Prediction{}, upstreamFailure(err)
+	}
+	if prediction.Image.Width <= 0 || prediction.Image.Height <= 0 || prediction.Detections == nil {
+		return Prediction{}, &UpstreamError{Status: http.StatusBadGateway, Cause: errors.New("invalid prediction payload")}
 	}
 	return prediction, nil
 }
