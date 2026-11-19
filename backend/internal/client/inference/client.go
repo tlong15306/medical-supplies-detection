@@ -10,11 +10,18 @@ import (
 	"mime/multipart"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 )
 
+type AccessCredentials struct {
+	ClientID     string
+	ClientSecret string
+}
+
 type Client struct {
 	baseURL    string
+	access     AccessCredentials
 	httpClient *http.Client
 }
 
@@ -58,13 +65,20 @@ type Detection struct {
 	BoundingBox [4]float64 `json:"bbox_xyxy"`
 }
 
-func NewClient(baseURL string) *Client {
-	return &Client{
-		baseURL: baseURL,
+func NewClient(baseURL string, access AccessCredentials) *Client {
+	client := &Client{
+		baseURL: strings.TrimRight(baseURL, "/"),
+		access:  access,
 		httpClient: &http.Client{
 			Timeout: 10 * time.Second, // Thời gian chờ tối đa cho mỗi request
 		},
 	}
+	if access != (AccessCredentials{}) {
+		client.httpClient.CheckRedirect = func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		}
+	}
+	return client
 }
 func (c *Client) Predict(ctx context.Context, filename string, image io.Reader) (Prediction, error) {
 	body := &bytes.Buffer{}
@@ -85,6 +99,16 @@ func (c *Client) Predict(ctx context.Context, filename string, image io.Reader) 
 		return Prediction{}, fmt.Errorf("Failed to create request: %w", err)
 	}
 	req.Header.Set("Content-Type", writer.FormDataContentType())
+	if c.access != (AccessCredentials{}) {
+		if c.access.ClientID == "" || c.access.ClientSecret == "" {
+			return Prediction{}, upstreamFailure(errors.New("set both Cloudflare Access credentials"))
+		}
+		if req.URL.Scheme != "https" || !strings.EqualFold(req.URL.Host, "infer.detect.io.vn") || req.URL.User != nil {
+			return Prediction{}, upstreamFailure(errors.New("Cloudflare Access credentials require https://infer.detect.io.vn"))
+		}
+		req.Header.Set("CF-Access-Client-Id", c.access.ClientID)
+		req.Header.Set("CF-Access-Client-Secret", c.access.ClientSecret)
+	}
 
 	// Gửi request
 	resp, err := c.httpClient.Do(req)

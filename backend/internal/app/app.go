@@ -34,7 +34,7 @@ func NewApplication(cfg *config.Config) *Application {
 	r.GET("/health/live", healthHandler.Live)
 
 	modules := []Module{
-		NewDetectionModule(cfg.InferenceBaseURL),
+		NewDetectionModule(cfg),
 	}
 
 	routes.RegisterRoutes(r, getModulRoutes(modules)...)
