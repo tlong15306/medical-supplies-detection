@@ -6,10 +6,16 @@ export class DetectionError extends Error {
 }
 
 export async function detectImage(image: Blob, filename: string, signal: AbortSignal): Promise<Result> {
+  const apiBase = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/+$/, '')
   const form = new FormData(); form.append('image', image, filename)
   let response: Response
-  try { response = await fetch('/api/v1/detections', { method: 'POST', body: form, signal }) }
-  catch (error) {
+  try {
+    response = await fetch(`${apiBase}/api/v1/detections`, {
+      method: 'POST',
+      body: form,
+      signal,
+    })
+  } catch (error) {
     if (signal.aborted) throw error
     throw new DetectionError('Không kết nối được dịch vụ nhận diện.', true)
   }

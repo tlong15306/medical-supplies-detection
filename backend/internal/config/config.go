@@ -5,8 +5,9 @@ import (
 )
 
 type Config struct {
-	ServerAddress    string
-	InferenceBaseURL string
+	ServerAddress     string
+	InferenceBaseURL  string
+	CORSAllowedOrigin string
 }
 
 func NewConfig() *Config {
@@ -19,7 +20,8 @@ func NewConfig() *Config {
 		inferenceBaseURL = "http://127.0.0.1:8000"
 	}
 	return &Config{
-		ServerAddress:    address,
-		InferenceBaseURL: inferenceBaseURL,
+		ServerAddress:     address,
+		InferenceBaseURL:  inferenceBaseURL,
+		CORSAllowedOrigin: os.Getenv("CORS_ALLOWED_ORIGIN"),
 	}
 }
