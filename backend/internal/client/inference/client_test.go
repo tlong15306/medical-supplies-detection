@@ -10,6 +10,54 @@ import (
 	"time"
 )
 
+type predictionTransport func(*http.Request) (*http.Response, error)
+
+func (transport predictionTransport) RoundTrip(request *http.Request) (*http.Response, error) {
+	return transport(request)
+}
+
+func TestPredictWithAccessCredentials(t *testing.T) {
+	credentials := AccessCredentials{ClientID: "test-id", ClientSecret: "test-secret"}
+	for _, test := range []struct {
+		name       string
+		baseURL    string
+		access     AccessCredentials
+		wantStatus int
+		wantCalls  int
+	}{
+		{"authorized host", "https://infer.detect.io.vn/", credentials, http.StatusBadGateway, 1},
+		{"other host", "https://elsewhere.example", credentials, http.StatusBadGateway, 0},
+		{"insecure scheme", "http://infer.detect.io.vn", credentials, http.StatusBadGateway, 0},
+		{"missing secret", "https://infer.detect.io.vn", AccessCredentials{ClientID: "test-id"}, http.StatusBadGateway, 0},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			client := NewClient(test.baseURL, test.access)
+			calls := 0
+			client.httpClient.Transport = predictionTransport(func(request *http.Request) (*http.Response, error) {
+				calls++
+				if request.URL.String() != "https://infer.detect.io.vn/predict" ||
+					request.Header.Get("CF-Access-Client-Id") != credentials.ClientID ||
+					request.Header.Get("CF-Access-Client-Secret") != credentials.ClientSecret {
+					t.Fatal("request has unexpected destination or Access credentials")
+				}
+				return &http.Response{
+					StatusCode: http.StatusTemporaryRedirect,
+					Header:     http.Header{"Location": {"https://elsewhere.example/predict"}},
+					Body:       http.NoBody,
+				}, nil
+			})
+			_, err := client.Predict(context.Background(), "webcam.jpg", strings.NewReader("test image"))
+			var upstream *UpstreamError
+			if !errors.As(err, &upstream) || upstream.Status != test.wantStatus {
+				t.Fatalf("error = %v; want status %d", err, test.wantStatus)
+			}
+			if calls != test.wantCalls {
+				t.Fatalf("transport called %d times; want %d", calls, test.wantCalls)
+			}
+		})
+	}
+}
+
 func TestPredict(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
@@ -41,7 +89,7 @@ func TestPredict(t *testing.T) {
 				_, _ = w.Write([]byte(tc.body))
 			}))
 			defer server.Close()
-			result, err := NewClient(server.URL).Predict(context.Background(), "webcam.jpg", strings.NewReader("fake image"))
+			result, err := NewClient(server.URL, AccessCredentials{}).Predict(context.Background(), "webcam.jpg", strings.NewReader("fake image"))
 			if tc.want == 0 {
 				if err != nil {
 					t.Fatal(err)
@@ -69,7 +117,7 @@ func TestPredictTimeout(t *testing.T) {
 	defer server.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
 	defer cancel()
-	_, err := NewClient(server.URL).Predict(ctx, "webcam.jpg", strings.NewReader("image"))
+	_, err := NewClient(server.URL, AccessCredentials{}).Predict(ctx, "webcam.jpg", strings.NewReader("image"))
 	var upstream *UpstreamError
 	if !errors.As(err, &upstream) || upstream.Status != 504 || !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("error = %v", err)
@@ -88,7 +136,7 @@ func TestPredictTimeoutReadingBody(t *testing.T) {
 	defer server.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
 	defer cancel()
-	_, err := NewClient(server.URL).Predict(ctx, "webcam.jpg", strings.NewReader("image"))
+	_, err := NewClient(server.URL, AccessCredentials{}).Predict(ctx, "webcam.jpg", strings.NewReader("image"))
 	var upstream *UpstreamError
 	if !errors.As(err, &upstream) || upstream.Status != 504 {
 		t.Fatalf("error = %v", err)
