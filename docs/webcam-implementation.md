@@ -159,7 +159,26 @@ Chạy liên tục ít nhất 5 phút, sau đó bật–tắt nhiều lần, đ�
 
 Đây là bước nghiệm thu thủ công còn cần làm khi có camera thật và GPU đang chạy; không đánh dấu đạt chỉ vì các test tự động thành công.
 
-## 7. Tự kiểm tra kiến thức
+## 7. Kế hoạch cải thiện webcam trên điện thoại
+
+Webcam đã gửi từng JPEG có cạnh dài tối đa 640 px, chất lượng 0,8 và chỉ có một request đang chờ mỗi phiên. Mức ba lượt mỗi giây là giới hạn khi API phản hồi đủ nhanh. Box chỉ hiển thị trong 1.500 ms tính từ lúc chụp, nên phản hồi mất 1.200 ms chỉ còn khoảng 300 ms để hiện box. Sau lỗi tạm thời như 429, vòng webcam chờ lần lượt 1, 2 và 4 giây trước các lượt thử lại.
+
+Ngày 22/11/2026, gửi tuần tự sáu lần cùng một JPEG 640 × 640, khoảng 22 KB, từ laptop qua API công khai sau khi kiểm tra Gin. Bốn lượt trả 200 mất 0,80–1,65 giây, trong đó FastAPI báo 40–136 ms xử lý mỗi ảnh. Hai lượt trả 429. Phép thử dùng tệp có sẵn, nên chưa đo thời gian camera, nén ảnh hay Wi‑Fi của điện thoại.
+
+| Thứ tự | Việc thực hiện | Cách kiểm tra |
+| --- | --- | --- |
+| 1. Đo trên thiết bị thật | Sau khi gọi `/health/live` và thử một ảnh nhỏ trên web, dùng một điện thoại và một tab webcam trong 30–60 giây. Lặp lại với Wi‑Fi gần router và 4G/5G, giữ nguyên vật, khoảng cách, ánh sáng và mạng laptop. Ghi riêng thời gian mở camera, thời gian đến kết quả đầu tiên, độ trễ từng khung, kích cỡ JPEG và số lỗi 429. | So sánh trung vị và p95 trên khoảng 30 lượt. Dùng `processing_ms` từ FastAPI và thời gian xử lý trong log Gin để khoanh vùng trước khi đổi thiết kế. |
+| 2. Cho người dùng thấy kết quả của đúng khung | Khi kết quả thường xuyên đến muộn, giữ video đang chạy và hiện khung ảnh vừa phân tích kèm box, nhãn và độ trễ. Thêm chế độ Chụp để nhận diện, chỉ gửi khi người dùng bấm nút. | Kiểm tra vật đang di chuyển, kết quả của khung cũ, tắt camera và bật lại. Box phải nằm trên khung đã tạo ra kết quả đó. |
+| 3. Giảm dữ liệu khi cần | Nếu kết quả đo cho thấy cạnh 640 px hoặc bước nén tốn thời gian đáng kể, thử cạnh 480 px và JPEG 0,7 trên mạng chậm. Giữ một request đang chờ mỗi phiên và giãn nhịp khi API báo 429. | Đo trước và sau với cùng mạng và vật mẫu. Kiểm tra lại nhãn và vị trí box, đặc biệt với vật nhỏ. |
+| 4. Xử lý đường đi nếu vẫn chậm | Nếu JPEG nhỏ vẫn chờ lâu trong khi FastAPI xử lý nhanh, so sánh mạng của điện thoại và laptop. Đo thêm đường mạng giữa Gin và inference để quyết định có cần đặt hai dịch vụ gần nhau hơn. | Giữ cùng mẫu ảnh và thời điểm service đã sẵn sàng. Chỉ đổi cách triển khai khi phép đo xác định được đoạn chậm. |
+
+Mục tiêu demo trên mạng ổn định là thấy kết quả đầu tiên trong khoảng 2 giây sau khi camera sẵn sàng và p95 của các lượt nhận diện dưới 1,5 giây nếu muốn giữ box trên video live. Nếu vượt ngưỡng, ưu tiên khung ảnh kết quả và chế độ chụp. Trước buổi quay, chỉ mở một phiên webcam, chạy thử với vật mẫu và chuẩn bị một ảnh JPG nhẹ để chuyển cảnh khi cần.
+
+### Ảnh iPhone chụp từ nút Tải ảnh
+
+Khi chọn Chụp ảnh trong hộp chọn tệp, iPhone trả một file cho chế độ Tải ảnh. Trước khi gọi `detectImage`, trình duyệt đọc hướng ảnh, giữ tỉ lệ và nén JPG với cạnh dài tối đa 1.280 px. Nếu file vượt 500 KiB, ứng dụng thử giảm chất lượng hoặc kích thước. Nếu không tạo được ảnh trong giới hạn, giao diện báo lỗi và dừng yêu cầu. Giao diện hiển thị bản đã gửi để khung nhận diện bám đúng ảnh và ghi dung lượng sau khi nén cạnh tên file. Lần bấm tiếp theo dùng lại bản nén khi vẫn chọn cùng ảnh. Phần nghiệm thu trên iPhone cần thử chụp dọc và ngang ngay từ nút Tải ảnh, kiểm tra dung lượng gửi, thời gian phản hồi, nhãn và vị trí khung.
+
+## 8. Tự kiểm tra kiến thức
 
 1. API mất 900 ms thì vòng gửi có đạt ba lượt/giây không? Giải thích theo thời điểm lên lịch tiếp theo.
 2. Bỏ kiểm tra `active` sau `getUserMedia` sẽ gây vấn đề gì khi quyền camera được cấp muộn?
