@@ -176,7 +176,7 @@ Mục tiêu demo trên mạng ổn định là thấy kết quả đầu tiên t
 
 ### Ảnh iPhone chụp từ nút Tải ảnh
 
-Khi chọn Chụp ảnh trong hộp chọn tệp, iPhone trả một file cho chế độ Tải ảnh. Trước khi gọi `detectImage`, trình duyệt đọc hướng ảnh, giữ tỉ lệ và nén JPG với cạnh dài tối đa 1.280 px. Nếu file vượt 500 KiB, ứng dụng thử giảm chất lượng hoặc kích thước. Nếu không tạo được ảnh trong giới hạn, giao diện báo lỗi và dừng yêu cầu. Giao diện hiển thị bản đã gửi để khung nhận diện bám đúng ảnh và ghi dung lượng sau khi nén cạnh tên file. Lần bấm tiếp theo dùng lại bản nén khi vẫn chọn cùng ảnh. Phần nghiệm thu trên iPhone cần thử chụp dọc và ngang ngay từ nút Tải ảnh, kiểm tra dung lượng gửi, thời gian phản hồi, nhãn và vị trí khung.
+Khi chọn Chụp ảnh trong hộp chọn tệp, iPhone trả một file cho chế độ Tải ảnh. File từ 1 MiB trở xuống được gửi nguyên bản. Với file lớn hơn, trình duyệt đọc hướng ảnh, giữ tỉ lệ và thử nén JPG từ mức chất lượng 0,92 đến 0,86 trước khi gọi `detectImage`. Mục tiêu theo cỡ file gốc là giữ lại khoảng 85% dung lượng cho ảnh đến 2 MiB, 75% cho ảnh đến 5 MiB và 65% cho ảnh trên 5 MiB. Nếu bản JPG vẫn nhẹ hơn nhưng chưa đạt mục tiêu, ứng dụng ưu tiên độ phân giải hiện tại. Ảnh có kích thước quá lớn được thu về mức canvas xử lý được, tối đa cạnh 4.096 px và 16 triệu điểm ảnh. Khi thử các mức nén mà không thu được tệp nhẹ hơn, ứng dụng giữ tệp gốc. Giao diện hiển thị đúng ảnh đã gửi để đặt khung nhận diện, đồng thời ghi dung lượng mới nếu đã nén. Phần nghiệm thu trên iPhone cần thử ảnh dọc và ngang, kiểm tra dung lượng gửi, nhãn và vị trí khung.
 
 ## 8. Tự kiểm tra kiến thức
 
