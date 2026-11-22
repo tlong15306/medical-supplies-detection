@@ -70,13 +70,22 @@ function App() {
     <div className="source-tabs" role="group" aria-label="Nguồn hình ảnh"><button aria-pressed={mode === 'image'} onClick={() => switchMode('image')}>Tải ảnh</button><button aria-pressed={mode === 'webcam'} onClick={() => switchMode('webcam')}>Webcam</button></div>
     <div className="layout"><section className="panel image-panel" aria-labelledby="image-title"><div className="panel-title"><div className="title-group"><span className="step">01</span><div><h2 id="image-title">{mode === 'webcam' ? 'Webcam' : 'Hình ảnh'}</h2><p>{mode === 'webcam' ? 'Camera trực tiếp trên thiết bị' : 'Chọn ảnh cần phân tích'}</p></div></div><span className="format-chip">{mode === 'webcam' ? 'LIVE' : 'JPG / PNG'}</span></div>
       {mode === 'webcam' ? <>
-        <div className="webcam-preview"><div className="image-wrap webcam-image"><video ref={webcam.video} muted playsInline aria-label="Hình ảnh webcam trực tiếp"/><DetectionBoxes result={result} selected={selected} onSelect={setSelected}/></div></div>
+        <div className="webcam-preview"><div className="image-wrap webcam-image"><video ref={webcam.video} muted playsInline aria-label="Hình ảnh webcam trực tiếp"/><DetectionBoxes result={webcam.snapshotUrl ? null : result} selected={selected} onSelect={setSelected}/></div></div>
         <div className="webcam-controls">
           {(webcam.status === 'idle' || webcam.status === 'failed') && <button className="choose-button" onClick={() => void webcam.start()}>{webcam.status === 'failed' ? 'Thử lại' : 'Bật webcam'}</button>}
           {webcam.status !== 'idle' && <button className="text-button" onClick={webcam.stop}>Tắt webcam</button>}
         </div>
         <p className="webcam-status" role="status">{webcam.message || 'Bật webcam để bắt đầu nhận diện liên tục.'}</p>
         {webcam.latency !== null && <p className="image-hint">Độ trễ: {webcam.latency} ms{webcam.fps !== null && ` · Cập nhật: ${webcam.fps.toFixed(1)} lần/giây`}</p>}
+        {webcam.snapshotUrl && (
+          <figure className="webcam-snapshot">
+            <figcaption>Khung đã phân tích</figcaption>
+            <div className="image-wrap" key={webcam.snapshotUrl}>
+              <img src={webcam.snapshotUrl} alt="Khung webcam đã gửi để nhận diện" width={result?.image_width} height={result?.image_height}/>
+              <DetectionBoxes result={result} selected={selected} onSelect={setSelected}/>
+            </div>
+          </figure>
+        )}
       </> : <>
       {!url ? <div className={'upload' + (dragging ? ' dragging' : '')} onDragOver={e => { e.preventDefault(); setDragging(true) }} onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragging(false) }} onDrop={e => { e.preventDefault(); setDragging(false); choose(e.dataTransfer.files[0]) }}><span className="upload-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 16V4m0 0L8 8m4-4 4 4M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg></span><strong>Kéo thả ảnh vào đây</strong><span>hoặc chọn ảnh từ thiết bị của bạn</span><button className="choose-button" onClick={() => input.current?.click()}>Chọn ảnh <span aria-hidden="true">→</span></button><small>JPG hoặc PNG · Tối đa 10 MiB</small></div> : <div className={'preview-area' + (dragging ? ' dragging' : '')} onDragOver={e => { e.preventDefault(); setDragging(true) }} onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragging(false) }} onDrop={e => { e.preventDefault(); setDragging(false); choose(e.dataTransfer.files[0]) }}><div className="image-wrap"><img src={url} alt={`Ảnh đã chọn: ${file?.name || ''}`} onError={() => { choose(); setImageError('Không thể đọc ảnh này. Vui lòng chọn ảnh khác.') }}/><DetectionBoxes result={result} selected={selected} onSelect={setSelected}/></div></div>}
       <input ref={input} type="file" accept="image/jpeg,image/png" hidden onChange={e => { choose(e.target.files?.[0]); e.target.value = '' }}/>
