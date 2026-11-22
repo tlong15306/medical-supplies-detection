@@ -80,78 +80,33 @@ test('late permission grant releases the camera without sending a frame', async 
 
 test('busy retries then replaces count with empty frame', async ({ page }) => {
   await camera(page); let calls = 0
-  const emptyFrame = Promise.withResolvers<void>()
   await page.route('**/api/v1/detections', async route => {
-    const call = ++calls
-    if (call === 1) return route.fulfill({ status: 429, json: { Error: 'Model đang bận' } })
-    if (call > 2) await emptyFrame.promise
-    await route.fulfill({ json: call === 2 ? result() : result([]) })
+    calls++
+    if (calls === 1) return route.fulfill({ status: 429, json: { Error: 'Model đang bận' } })
+    await route.fulfill({ json: calls === 2 ? result() : result([]) })
   })
   await open(page)
   await expect(page.locator('.webcam-status')).toContainText('Thử lại sau 1 giây')
-  try {
-    await expect(page.locator('.detection-box')).toHaveCount(1)
-  } finally {
-    emptyFrame.resolve()
-  }
+  await expect(page.locator('.detection-box')).toHaveCount(1)
   await expect(page.locator('.detection-box')).toHaveCount(0)
   await expect(page.locator('.notice')).toContainText('Không phát hiện rác')
 })
 
-test('slow results appear on the submitted frame and clear when the webcam stops', async ({ page }, testInfo) => {
-  await camera(page)
-  await page.addInitScript(() => {
-    const encode = HTMLCanvasElement.prototype.toBlob
-    let encodedFrames = 0
-    // Mark different JPEGs while keeping the real browser encoder.
-    HTMLCanvasElement.prototype.toBlob = function (callback, type, quality) {
-      const context = this.getContext('2d')!
-      context.fillStyle = encodedFrames++ % 2 ? '#c9b8a0' : '#b1c7b5'
-      context.fillRect(0, 0, 128, 128)
-      return encode.call(this, callback, type, quality)
-    }
-  })
-  let calls = 0
-  let firstFrame: Buffer | undefined
-  let slowFrame: Buffer | undefined
+test('stale boxes expire and old response cannot revive stopped session', async ({ page }) => {
+  await camera(page); let calls = 0
   await page.route('**/api/v1/detections', async route => {
     calls++
-    if (calls <= 2) {
-      const body = route.request().postDataBuffer()!
-      const jpegStart = body.indexOf(Buffer.from([0xff, 0xd8]))
-      const jpegEnd = body.lastIndexOf(Buffer.from([0xff, 0xd9]))
-      const frame = body.subarray(jpegStart, jpegEnd + 2)
-      if (calls === 1) firstFrame = frame
-      else slowFrame = frame
-    }
-    if (calls > 1) await new Promise(resolve => setTimeout(resolve, 2800))
+    if (calls > 1) await new Promise(resolve => setTimeout(resolve, 2200))
     await route.fulfill({ json: result() })
   })
-  await page.setViewportSize({ width: 390, height: 844 })
   await open(page)
-  const liveBoxes = page.locator('.webcam-image .detection-box')
-  await expect(liveBoxes).toHaveCount(1)
-  await expect(liveBoxes).toHaveCount(0)
-  await expect(page.locator('.webcam-status')).toContainText('Kết quả chậm · xem khung đã phân tích')
-  const snapshot = page.getByRole('img', { name: 'Khung webcam đã gửi để nhận diện' })
-  await expect(snapshot).toHaveJSProperty('naturalWidth', 640)
-  const snapshotBytes = await snapshot.evaluate(async image => {
-    const response = await fetch((image as HTMLImageElement).src)
-    return Array.from(new Uint8Array(await response.arrayBuffer()))
-  })
-  expect(slowFrame).not.toEqual(firstFrame)
-  expect(Buffer.from(snapshotBytes)).toEqual(slowFrame)
-  await expect(page.locator('.webcam-snapshot .detection-box')).toHaveCount(1)
-  await expect(page.locator('.detection-row')).toHaveCount(1)
-  await expect(liveBoxes).toHaveCount(0)
-  await page.locator('.webcam-snapshot').screenshot({ path: testInfo.outputPath('slow-webcam-snapshot.png') })
-  await page.getByRole('button', { name: 'Tắt webcam' }).click()
-  await expect(snapshot).toHaveCount(0)
+  await expect(page.locator('.detection-box')).toHaveCount(1)
+  await expect(page.locator('.detection-box')).toHaveCount(0)
+  await expect(page.locator('.webcam-status')).toContainText('Kết quả chậm')
+  await page.getByRole('button', { name: 'Tải ảnh', exact: true }).click()
+  await page.waitForTimeout(2300)
   await expect(page.locator('.detection-box')).toHaveCount(0)
   await expect.poll(() => page.evaluate(() => (window as any).stopped)).toBe(1)
-  // A late response from the old session must not recreate the snapshot.
-  await page.waitForTimeout(2900)
-  await expect(snapshot).toHaveCount(0)
 })
 
 test('three retries then manual retry', async ({ page }) => {

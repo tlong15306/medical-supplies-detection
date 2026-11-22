@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { detectImage, DetectionError, type Result } from './detection'
 
-type State = { status: 'idle' | 'starting' | 'running' | 'retrying' | 'failed'; result: Result | null; snapshotUrl: string | null; message: string; latency: number | null; fps: number | null }
-const initial: State = { status: 'idle', result: null, snapshotUrl: null, message: '', latency: null, fps: null }
+type State = { status: 'idle' | 'starting' | 'running' | 'retrying' | 'failed'; result: Result | null; message: string; latency: number | null; fps: number | null }
+const initial: State = { status: 'idle', result: null, message: '', latency: null, fps: null }
 const interval = 1000 / 3
 const maxAge = 1500
 
@@ -29,22 +29,16 @@ export function useWebcam() {
     let active = true
     let stream: MediaStream | null = null
     let request: AbortController | null = null
-    let snapshotUrl: string | null = null
     const timers = new Set<ReturnType<typeof setTimeout>>()
     const later = (fn: () => void, delay: number) => {
       const id = setTimeout(() => { timers.delete(id); if (active) fn() }, delay)
       timers.add(id); return id
     }
     const cancelTimer = (id: ReturnType<typeof setTimeout>) => { clearTimeout(id); timers.delete(id) }
-    const clearSnapshot = () => {
-      if (snapshotUrl) URL.revokeObjectURL(snapshotUrl)
-      snapshotUrl = null
-    }
     const dispose = () => {
       active = false
       timers.forEach(clearTimeout); timers.clear()
       request?.abort()
-      clearSnapshot()
       stream?.getTracks().forEach(track => track.stop())
       if (video.current?.srcObject === stream) video.current.srcObject = null
     }
@@ -91,31 +85,20 @@ export function useWebcam() {
           const now = performance.now(), age = now - captured
           failures = 0
           if (staleTimer) cancelTimer(staleTimer)
-          clearSnapshot()
-          const fresh = age < maxAge
-          if (!fresh) snapshotUrl = URL.createObjectURL(blob)
-          setState({
-            status: 'running',
-            result,
-            snapshotUrl,
-            message: fresh ? 'Đang nhận diện liên tục' : 'Kết quả chậm · xem khung đã phân tích',
-            latency: Math.round(age),
-            fps: lastSuccess ? 1000 / (now - lastSuccess) : null,
-          })
+          setState({ status: 'running', result: age < maxAge ? result : null, message: age < maxAge ? 'Đang nhận diện liên tục' : 'Kết quả chậm — đang chờ khung mới', latency: Math.round(age), fps: lastSuccess ? 1000 / (now - lastSuccess) : null })
           lastSuccess = now
-          if (fresh) staleTimer = later(() => setState(previous => ({ ...previous, result: null, message: 'Đang chờ khung mới' })), maxAge - age)
+          if (age < maxAge) staleTimer = later(() => setState(previous => ({ ...previous, result: null, message: 'Kết quả chậm — đang chờ khung mới' })), maxAge - age)
           later(() => { void tick() }, Math.max(0, Math.ceil(interval - age)))
         } catch (error) {
           if (!active) return
           if (staleTimer) cancelTimer(staleTimer)
-          clearSnapshot()
           const retryable = timedOut || (error instanceof DetectionError && error.retryable)
           const message = timedOut ? 'Dịch vụ nhận diện phản hồi quá chậm.' : error instanceof Error ? error.message : 'Không thể nhận diện.'
           if (retryable && failures < 3) {
             const delay = 1000 * 2 ** failures++
-            setState(previous => ({ ...previous, result: null, snapshotUrl: null, status: 'retrying', message: `${message} Thử lại sau ${delay / 1000} giây (${failures}/3).` }))
+            setState(previous => ({ ...previous, result: null, status: 'retrying', message: `${message} Thử lại sau ${delay / 1000} giây (${failures}/3).` }))
             later(() => { void tick() }, delay)
-          } else setState(previous => ({ ...previous, result: null, snapshotUrl: null, status: 'failed', message }))
+          } else setState(previous => ({ ...previous, result: null, status: 'failed', message }))
         } finally {
           cancelTimer(timeout)
           if (request === controller) request = null
